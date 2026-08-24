@@ -1,15 +1,24 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DashboardLayout from '../../components/DashboardLayout.vue'
-import { mockOrders, formatDateTime, formatDate } from '../../data/mockData'
+import { useOrdersStore } from '../../stores/orders'
+import { formatDateTime, formatDate } from '../../data/mockData'
 import { useToastStore } from '../../stores/toast'
 
 const route = useRoute()
 const router = useRouter()
+const ordersStore = useOrdersStore()
 const toast = useToastStore()
 
-const order = computed(() => mockOrders.find(o => o.id === route.params.id))
+onMounted(() => {
+  if (!ordersStore.orders.length) {
+    ordersStore.fetchUserOrders()
+  }
+})
+
+const order = computed(() => ordersStore.getOrderById(route.params.id))
+
 const showCreds = ref(false)
 const copied = ref(false)
 

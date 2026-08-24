@@ -3,11 +3,13 @@ import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProductsStore } from '../stores/products'
 import { useAuthStore } from '../stores/auth'
+import { useOrdersStore } from '../stores/orders'
 import { useToastStore } from '../stores/toast'
 
 const route = useRoute()
 const router = useRouter()
 const productsStore = useProductsStore()
+const ordersStore = useOrdersStore()
 const auth = useAuthStore()
 const toast = useToastStore()
 
@@ -43,13 +45,32 @@ async function confirmPurchase() {
     return
   }
   purchasing.value = true
-  await new Promise(r => setTimeout(r, 1200))
-  auth.deductBalance(selectedPkg.value.price)
+  
+  const deducted = await auth.deductBalance(selectedPkg.value.price)
+  if (!deducted) {
+    toast.error('ยอดเงินไม่เพียงพอ กรุณาเติมเงิน')
+    purchasing.value = false
+    return
+  }
+
+  // Create order in store / Supabase
+  const result = await ordersStore.createOrder({
+    product: product.value,
+    packageInfo: selectedPkg.value,
+    amount: selectedPkg.value.price
+  })
+
   toast.success(`ซื้อ ${product.value.name} สำเร็จ! ตรวจสอบบัญชีได้ที่ Orders`)
   purchasing.value = false
   showConfirm.value = false
-  router.push('/orders')
+  
+  if (result?.order?.id) {
+    router.push(`/orders/${result.order.id}`)
+  } else {
+    router.push('/orders')
+  }
 }
+
 
 const relatedProducts = computed(() =>
   productsStore.products.filter(p => p.category === product.value?.category && p.id !== product.value?.id).slice(0, 3)

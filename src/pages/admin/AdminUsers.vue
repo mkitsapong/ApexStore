@@ -1,13 +1,44 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import AdminLayout from '../../components/AdminLayout.vue'
 import { useToastStore } from '../../stores/toast'
 import { mockUsers, formatDate, formatCurrency } from '../../data/mockData'
+import { supabase, isSupabaseConfigured } from '../../services/supabase'
 
 const toast = useToastStore()
 const users = ref([...mockUsers])
 const search = ref('')
 const filterRole = ref('all')
+const loading = ref(false)
+
+async function fetchUsers() {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      loading.value = true
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+      if (!error && data && data.length > 0) {
+        users.value = data.map(u => ({
+          id: u.id,
+          username: u.username || 'User',
+          email: u.email || '-',
+          balance: Number(u.balance) || 0,
+          role: u.role || 'user',
+          total_orders: 0,
+          status: u.status || 'active',
+          created_at: u.created_at
+        }))
+      }
+    } catch (err) {
+      console.error('Error fetching Supabase profiles:', err)
+    } finally {
+      loading.value = false
+    }
+  }
+}
+
+onMounted(() => {
+  fetchUsers()
+})
 
 const filtered = () => {
   let list = users.value
@@ -19,16 +50,31 @@ const filtered = () => {
   return list
 }
 
-function toggleStatus(u) {
+async function toggleStatus(u) {
   u.status = u.status === 'active' ? 'suspended' : 'active'
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('profiles').update({ status: u.status, updated_at: new Date().toISOString() }).eq('id', u.id)
+    } catch (err) {
+      console.error('Error updating status in Supabase:', err)
+    }
+  }
   toast.info(`${u.username}: ${u.status === 'active' ? 'เปิดใช้งาน' : 'ระงับ'}`)
 }
 
-function adjustBalance(u, amount) {
+async function adjustBalance(u, amount) {
   u.balance = Math.max(0, u.balance + amount)
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('profiles').update({ balance: u.balance, updated_at: new Date().toISOString() }).eq('id', u.id)
+    } catch (err) {
+      console.error('Error adjusting balance in Supabase:', err)
+    }
+  }
   toast.success(`${u.username}: ยอดเงิน ${amount > 0 ? '+' : ''}${amount}`)
 }
 </script>
+
 
 <template>
   <AdminLayout>

@@ -23,6 +23,13 @@ function fillDemo(type) {
   if (type === 'user') { email.value = 'demo@apexstore.com'; password.value = 'demo1234' }
   else { email.value = 'admin@apexstore.com'; password.value = 'admin1234' }
 }
+async function handleGoogleLogin() {
+  const res = await auth.loginWithGoogle()
+  if (res.success && res.user) {
+    const redirect = route.query.redirect || (auth.isAdmin ? '/admin' : '/dashboard')
+    router.push(redirect)
+  }
+}
 </script>
 
 <template>
@@ -35,20 +42,38 @@ function fillDemo(type) {
       <RouterLink to="/" class="auth-logo">⚡ Apex<span>Store</span></RouterLink>
 
       <div class="auth-card">
-        <div style="text-align:center; margin-bottom:var(--space-8);">
+        <div style="text-align:center; margin-bottom:var(--space-6);">
           <h1 style="font-size:1.75rem; margin-bottom:var(--space-2);">ยินดีต้อนรับกลับ</h1>
           <p style="color:var(--gray-500); font-size:0.9375rem;">เข้าสู่ระบบเพื่อเริ่มต้นช้อปปิ้ง</p>
         </div>
 
+        <!-- Google OAuth Button -->
+        <button
+          type="button"
+          class="google-btn"
+          @click="handleGoogleLogin"
+          :disabled="auth.loading"
+          id="google-login-btn"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"/>
+            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+          </svg>
+          <span>ดำเนินการต่อด้วย Google</span>
+        </button>
+
         <!-- Demo buttons -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); margin-bottom:var(--space-6);">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); margin-top:var(--space-3); margin-bottom:var(--space-6);">
           <button class="btn btn-secondary btn-sm" @click="fillDemo('user')">👤 Demo User</button>
           <button class="btn btn-secondary btn-sm" @click="fillDemo('admin')">👑 Demo Admin</button>
         </div>
 
         <div class="divider" style="margin-bottom:var(--space-6); position:relative;">
-          <span style="position:absolute; left:50%; transform:translateX(-50%); top:-10px; background:var(--bg-elevated); padding:0 var(--space-3); font-size:0.8125rem; color:var(--gray-500);">หรือ</span>
+          <span style="position:absolute; left:50%; transform:translateX(-50%); top:-10px; background:var(--bg-elevated); padding:0 var(--space-3); font-size:0.8125rem; color:var(--gray-500);">หรือเข้าสู่ระบบด้วยอีเมล</span>
         </div>
+
 
         <form @submit.prevent="handleLogin" style="display:flex; flex-direction:column; gap:var(--space-4);">
           <div class="form-group">

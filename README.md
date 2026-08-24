@@ -50,8 +50,23 @@
 - **QR Code & Slip Scanning**:
   - `qrcode` (สร้าง PromptPay EMVCo QR Code)
   - `jsqr` (อ่านและถอดรหัส QR Code จากภาพสลิป)
+- **Backend & Database**: [Supabase](https://supabase.com) (PostgreSQL, Supabase Auth, Row Level Security, RPC Functions)
 - **Styling**: Vanilla CSS Design System (Dark Navy/Orange Theme, Glassmorphism, Responsive)
 - **Fonts**: [Google Fonts (Noto Sans Thai & Inter)](https://fonts.google.com/)
+
+---
+
+## ⚡ การเชื่อมต่อ Supabase Database & Auth
+
+โปรเจกต์นี้รองรับ **Supabase** อย่างเต็มรูปแบบ พร้อมโหมด **Graceful Fallback** (สลับทำงานระหว่าง Live Supabase และ Local Demo ได้อย่างราบรื่น)
+
+1. อ่านขั้นตอนการตั้งค่าอย่างละเอียดได้ที่ 📖 **[SUPABASE_SETUP.md](./SUPABASE_SETUP.md)**
+2. รันคำสั่ง SQL จากไฟล์ **[`supabase/schema.sql`](./supabase/schema.sql)** ใน Supabase SQL Editor
+3. กำหนดค่าใน `.env`:
+   ```env
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key-here
+   ```
 
 ---
 
@@ -76,3 +91,4 @@ npm run build
 |---|---|---|
 | 👤 **User (สมาชิก)** | `demo@apexstore.com` | `demo1234` |
 | 👑 **Admin (แอดมิน)** | `admin@apexstore.com` | `admin1234` |
+

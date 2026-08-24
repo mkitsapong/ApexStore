@@ -1,11 +1,17 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '../../components/DashboardLayout.vue'
-import { mockOrders, formatDateTime } from '../../data/mockData'
+import { useOrdersStore } from '../../stores/orders'
+import { formatDateTime } from '../../data/mockData'
 
 const router = useRouter()
+const ordersStore = useOrdersStore()
 const filter = ref('all')
+
+onMounted(() => {
+  ordersStore.fetchUserOrders()
+})
 
 const statusConfig = {
   completed: { label: 'สำเร็จ', badgeClass: 'badge-success' },
@@ -14,8 +20,8 @@ const statusConfig = {
 }
 
 const filtered = computed(() => {
-  if (filter.value === 'all') return mockOrders
-  return mockOrders.filter(o => o.status === filter.value)
+  if (filter.value === 'all') return ordersStore.orders
+  return ordersStore.orders.filter(o => o.status === filter.value)
 })
 </script>
 
@@ -33,7 +39,7 @@ const filtered = computed(() => {
       <!-- Filter tabs -->
       <div class="tabs">
         <button v-for="f in ['all','completed','pending','rejected']" :key="f" :class="['tab', {active: filter === f}]" @click="filter=f">
-          {{ f === 'all' ? 'ทั้งหมด' : statusConfig[f]?.label }} ({{ f === 'all' ? mockOrders.length : mockOrders.filter(o=>o.status===f).length }})
+          {{ f === 'all' ? 'ทั้งหมด' : statusConfig[f]?.label }} ({{ f === 'all' ? ordersStore.orders.length : ordersStore.orders.filter(o=>o.status===f).length }})
         </button>
       </div>
 

@@ -1,12 +1,17 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import AdminLayout from '../../components/AdminLayout.vue'
 import { usePaymentStore } from '../../stores/payment'
 import { useToastStore } from '../../stores/toast'
 import { formatDateTime, formatCurrency } from '../../data/mockData'
+import { getSlipUrl } from '../../services/storage'
 
 const payment = usePaymentStore()
 const toast = useToastStore()
+
+onMounted(() => {
+  payment.fetchTopups()
+})
 
 const filterStatus = ref('all')
 const showSlipModal = ref(false)
@@ -37,8 +42,12 @@ const stats = computed(() => {
   ]
 })
 
-function viewSlip(slipUrl) {
-  selectedSlip.value = slipUrl
+async function viewSlip(slipUrl) {
+  if (!slipUrl) {
+    toast.error('ไม่พบรูปภาพสลิป')
+    return
+  }
+  selectedSlip.value = await getSlipUrl(slipUrl)
   showSlipModal.value = true
 }
 

@@ -1,29 +1,32 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import AdminLayout from '../../components/AdminLayout.vue'
 import { useToastStore } from '../../stores/toast'
-import { mockOrders, formatDateTime } from '../../data/mockData'
+import { useOrdersStore } from '../../stores/orders'
+import { formatDateTime } from '../../data/mockData'
 
 const toast = useToastStore()
-const orders = ref([...mockOrders])
+const ordersStore = useOrdersStore()
 const filterStatus = ref('all')
+
+onMounted(() => {
+  ordersStore.fetchAllOrders()
+})
+
+const orders = computed(() => ordersStore.orders)
 
 const filtered = () => filterStatus.value === 'all' ? orders.value : orders.value.filter(o => o.status === filterStatus.value)
 
-function approve(id) {
-  const o = orders.value.find(o => o.id === id)
-  if (o) {
-    o.status = 'completed'
-    o.account_email = `auto.acc${id.slice(-2)}@example.com`
-    o.account_password = `Pass${id.slice(-4)}!`
-    toast.success('อนุมัติคำสั่งซื้อสำเร็จ')
-  }
+async function approve(id) {
+  await ordersStore.approveOrder(id)
+  toast.success('อนุมัติคำสั่งซื้อสำเร็จ')
 }
 
-function reject(id) {
-  const o = orders.value.find(o => o.id === id)
-  if (o) { o.status = 'rejected'; toast.success('ปฏิเสธคำสั่งซื้อแล้ว') }
+async function reject(id) {
+  await ordersStore.rejectOrder(id)
+  toast.success('ปฏิเสธคำสั่งซื้อแล้ว')
 }
+
 
 const statusBadge = { completed: 'badge-success', pending: 'badge-warning', rejected: 'badge-danger' }
 const statusLabel = { completed: 'สำเร็จ', pending: 'รอดำเนินการ', rejected: 'ถูกปฏิเสธ' }

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import AdminLayout from '../../components/AdminLayout.vue'
 import { useProductsStore, BRAND_IMAGE_PRESETS } from '../../stores/products'
 import { useToastStore } from '../../stores/toast'
+import { uploadProductImage } from '../../services/storage'
 
 const productsStore = useProductsStore()
 const toast = useToastStore()
@@ -15,6 +16,7 @@ const categories = ['streaming', 'music', 'design', 'ai', 'other']
 // Image selection state
 const imageTab = ref('upload') // 'upload' | 'url' | 'presets'
 const isImageError = ref(false)
+const uploadingImage = ref(false)
 
 function openAdd() {
   editMode.value = false
@@ -33,6 +35,7 @@ function openAdd() {
     features: ['ใช้งานได้ทันที', 'ไม่มีโฆษณา', 'รับประกันตลอดการใช้งาน']
   }
   isImageError.value = false
+  uploadingImage.value = false
   showModal.value = true
 }
 
@@ -40,10 +43,11 @@ function openEdit(p) {
   editMode.value = true
   form.value = JSON.parse(JSON.stringify(p))
   isImageError.value = false
+  uploadingImage.value = false
   showModal.value = true
 }
 
-function onFileSelect(e) {
+async function onFileSelect(e) {
   const file = e.target.files?.[0]
   if (!file) return
   if (!file.type.startsWith('image/')) {
@@ -51,15 +55,19 @@ function onFileSelect(e) {
     return
   }
 
-  // Convert to Base64
-  const reader = new FileReader()
-  reader.onload = (event) => {
-    form.value.image_url = event.target.result
+  uploadingImage.value = true
+  const res = await uploadProductImage(file)
+  uploadingImage.value = false
+
+  if (res.success && res.url) {
+    form.value.image_url = res.url
     isImageError.value = false
-    toast.success('อัปโหลดรูปภาพสำเร็จ')
+    toast.success('อัปโหลดรูปภาพสินค้าสำเร็จ')
+  } else {
+    toast.error(res.error || 'เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ')
   }
-  reader.readAsDataURL(file)
 }
+
 
 function selectPreset(preset) {
   form.value.image_url = preset.url
@@ -242,22 +250,32 @@ function toggleAvailable(p) {
 
                   <!-- Tab 1: Upload File -->
                   <div v-if="imageTab === 'upload'">
-                    <label class="upload-dropzone">
+                    <label class="upload-dropzone" :style="uploadingImage ? 'pointer-events:none; opacity:0.7;' : ''">
                       <input
                         type="file"
                         accept="image/*"
                         style="display:none;"
+                        :disabled="uploadingImage"
                         @change="onFileSelect"
                       />
-                      <div style="font-size:2rem; margin-bottom:var(--space-2);">📤</div>
-                      <div style="font-weight:600; color:var(--white); font-size:0.9rem;">
-                        คลิกเพื่อเลือกไฟล์รูปภาพจากคอมพิวเตอร์
+                      <div v-if="uploadingImage" style="display:flex; flex-direction:column; align-items:center; gap:var(--space-2); padding:var(--space-2);">
+                        <div class="spinner" style="width:28px; height:28px;"></div>
+                        <div style="font-weight:600; color:var(--accent-400); font-size:0.9rem;">
+                          กำลังอัปโหลดรูปภาพขึ้น Storage...
+                        </div>
                       </div>
-                      <div style="font-size:0.75rem; color:var(--gray-400); margin-top:2px;">
-                        รองรับ PNG, JPG, WebP, SVG (ระบบแปลงบันทึกอัตโนมัติ)
+                      <div v-else>
+                        <div style="font-size:2rem; margin-bottom:var(--space-2);">📤</div>
+                        <div style="font-weight:600; color:var(--white); font-size:0.9rem;">
+                          คลิกเพื่อเลือกไฟล์รูปภาพจากคอมพิวเตอร์
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--gray-400); margin-top:2px;">
+                          บันทึกลง Supabase Storage อัตโนมัติ (PNG, JPG, WebP, SVG)
+                        </div>
                       </div>
                     </label>
                   </div>
+
 
                   <!-- Tab 2: Direct URL -->
                   <div v-if="imageTab === 'url'" class="form-group">
