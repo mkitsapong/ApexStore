@@ -129,6 +129,36 @@ create table if not exists public.app_settings (
   updated_at timestamptz not null default now()
 );
 
+-- 9. Create Support Tickets Table
+create table if not exists public.support_tickets (
+  id text primary key,
+  order_id text references public.orders(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete set null,
+  username text,
+  product_name text not null,
+  category text not null check (category in ('login_failed', 'screen_full', 'premature_expire', 'wrong_package', 'other')),
+  title text not null default 'แจ้งปัญหาการใช้งานบัญชี',
+  description text not null,
+  status text not null default 'pending' check (status in ('pending', 'in_progress', 'resolved', 'rejected')),
+  admin_note text,
+  replacement_email text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+
+-- 10. Create In-App Notifications Table
+create table if not exists public.notifications (
+  id text primary key,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null check (type in ('order_approved', 'order_created', 'topup_success', 'expiry_warning', 'ticket_resolved', 'system')),
+  title text not null,
+  message text not null,
+  link text,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 -- ========================================================
 -- Row Level Security (RLS) Policies
 -- ========================================================
@@ -138,56 +168,107 @@ alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.topup_transactions enable row level security;
 alter table public.app_settings enable row level security;
+alter table public.support_tickets enable row level security;
+alter table public.notifications enable row level security;
 
 -- Profiles Policies
+drop policy if exists "Public can view basic profiles" on public.profiles;
 create policy "Public can view basic profiles" on public.profiles
   for select using (true);
 
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles
   for update using (auth.uid() = id);
 
+drop policy if exists "Admins have full access to profiles" on public.profiles;
 create policy "Admins have full access to profiles" on public.profiles
   for all using (public.is_admin());
 
 -- Products Policies
+drop policy if exists "Anyone can view products" on public.products;
 create policy "Anyone can view products" on public.products
   for select using (true);
 
+drop policy if exists "Admins can insert products" on public.products;
 create policy "Admins can insert products" on public.products
   for insert with check (public.is_admin());
 
+drop policy if exists "Admins can update products" on public.products;
 create policy "Admins can update products" on public.products
   for update using (public.is_admin());
 
+drop policy if exists "Admins can delete products" on public.products;
 create policy "Admins can delete products" on public.products
   for delete using (public.is_admin());
 
 -- Orders Policies
+drop policy if exists "Users can view own orders" on public.orders;
 create policy "Users can view own orders" on public.orders
   for select using (auth.uid() = user_id or public.is_admin());
 
+drop policy if exists "Users can insert own orders" on public.orders;
 create policy "Users can insert own orders" on public.orders
   for insert with check (auth.uid() = user_id or public.is_admin());
 
+drop policy if exists "Admins can update orders" on public.orders;
 create policy "Admins can update orders" on public.orders
   for update using (public.is_admin());
 
 -- Topup Transactions Policies
+drop policy if exists "Users can view own topups" on public.topup_transactions;
 create policy "Users can view own topups" on public.topup_transactions
   for select using (auth.uid() = user_id or public.is_admin());
 
+drop policy if exists "Users can insert topups" on public.topup_transactions;
 create policy "Users can insert topups" on public.topup_transactions
   for insert with check (auth.uid() = user_id or user_id is null or public.is_admin());
 
+drop policy if exists "Admins can update topups" on public.topup_transactions;
 create policy "Admins can update topups" on public.topup_transactions
   for update using (public.is_admin());
 
 -- App Settings Policies (Public can view non-secret settings, Admins can view and manage all)
+drop policy if exists "Anyone can view public settings" on public.app_settings;
 create policy "Anyone can view public settings" on public.app_settings
   for select using (key != 'encryption_settings' or public.is_admin());
 
+drop policy if exists "Admins can manage settings" on public.app_settings;
 create policy "Admins can manage settings" on public.app_settings
   for all using (public.is_admin());
+
+-- Support Tickets Policies
+drop policy if exists "Users can view own tickets" on public.support_tickets;
+create policy "Users can view own tickets" on public.support_tickets
+  for select using (auth.uid() = user_id or public.is_admin());
+
+drop policy if exists "Users can insert own tickets" on public.support_tickets;
+create policy "Users can insert own tickets" on public.support_tickets
+  for insert with check (auth.uid() = user_id or public.is_admin());
+
+drop policy if exists "Admins can update tickets" on public.support_tickets;
+create policy "Admins can update tickets" on public.support_tickets
+  for update using (public.is_admin());
+
+drop policy if exists "Admins can delete tickets" on public.support_tickets;
+create policy "Admins can delete tickets" on public.support_tickets
+  for delete using (public.is_admin());
+
+-- Notifications Policies
+drop policy if exists "Users can view own notifications" on public.notifications;
+create policy "Users can view own notifications" on public.notifications
+  for select using (auth.uid() = user_id or public.is_admin());
+
+drop policy if exists "Users and system can insert notifications" on public.notifications;
+create policy "Users and system can insert notifications" on public.notifications
+  for insert with check (auth.uid() = user_id or auth.uid() is not null or public.is_admin());
+
+drop policy if exists "Users can update own notifications" on public.notifications;
+create policy "Users can update own notifications" on public.notifications
+  for update using (auth.uid() = user_id or public.is_admin());
+
+drop policy if exists "Users can delete own notifications" on public.notifications;
+create policy "Users can delete own notifications" on public.notifications
+  for delete using (auth.uid() = user_id or public.is_admin());
 
 -- ========================================================
 -- Stored Procedures / RPC Functions
@@ -300,6 +381,49 @@ begin
     'email',    v_order.account_email,
     'password', v_plain_pass
   );
+end;
+$$;
+
+-- RPC: Resolve Support Ticket & optionally provide replacement credentials (Admin Only)
+create or replace function public.resolve_support_ticket(
+  p_ticket_id text,
+  p_admin_note text,
+  p_status text default 'resolved',
+  p_new_email text default null,
+  p_new_password text default null
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_ticket public.support_tickets%ROWTYPE;
+begin
+  if not public.is_admin() then
+    return jsonb_build_object('success', false, 'error', 'ไม่มีสิทธิ์ดำเนินการนี้');
+  end if;
+
+  select * into v_ticket from public.support_tickets where id = p_ticket_id;
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'ไม่พบรายการแจ้งปัญหานี้');
+  end if;
+
+  -- If replacement credentials provided, update order credentials securely via AES-256
+  if p_new_email is not null and p_new_password is not null and length(p_new_password) > 0 then
+    perform public.set_order_credentials(v_ticket.order_id, p_new_email, p_new_password);
+  end if;
+
+  -- Update Ticket
+  update public.support_tickets
+  set
+    status = p_status,
+    admin_note = p_admin_note,
+    replacement_email = p_new_email,
+    resolved_at = case when p_status in ('resolved', 'rejected') then now() else resolved_at end,
+    updated_at = now()
+  where id = p_ticket_id;
+
+  return jsonb_build_object('success', true);
 end;
 $$;
 
@@ -666,6 +790,22 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'app_settings'
   ) then
     alter publication supabase_realtime add table public.app_settings;
+  end if;
+
+  -- Add support_tickets to realtime
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'support_tickets'
+  ) then
+    alter publication supabase_realtime add table public.support_tickets;
+  end if;
+
+  -- Add notifications to realtime
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notifications'
+  ) then
+    alter publication supabase_realtime add table public.notifications;
   end if;
 end $$;
 

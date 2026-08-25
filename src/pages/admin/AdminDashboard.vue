@@ -4,6 +4,7 @@ import AdminLayout from '../../components/AdminLayout.vue'
 import { useOrdersStore } from '../../stores/orders'
 import { usePaymentStore } from '../../stores/payment'
 import { useProductsStore } from '../../stores/products'
+import { useTicketsStore } from '../../stores/tickets'
 import { mockUsers, formatDateTime, formatCurrency, formatDate } from '../../data/mockData'
 import { supabase, isSupabaseConfigured } from '../../services/supabase'
 import { Chart, registerables } from 'chart.js'
@@ -13,6 +14,7 @@ Chart.register(...registerables)
 const ordersStore = useOrdersStore()
 const paymentStore = usePaymentStore()
 const productsStore = useProductsStore()
+const ticketsStore = useTicketsStore()
 
 // Time Filter State
 const timeFilter = ref('30d') // '7d' | '30d' | 'month' | 'all'
@@ -38,6 +40,7 @@ onMounted(async () => {
       ordersStore.fetchAllOrders(),
       paymentStore.fetchTopups(),
       productsStore.fetchProducts(),
+      ticketsStore.fetchAllTickets(),
       fetchUsers()
     ])
   } catch (err) {
@@ -524,6 +527,23 @@ const statusLabel = { completed: 'สำเร็จ', pending: 'รอดำเ
             {{ t.label }}
           </button>
         </div>
+      </div>
+
+      <!-- Pending Support Tickets Alert Banner -->
+      <div
+        v-if="ticketsStore.pendingTicketsCount > 0"
+        style="padding:var(--space-4) var(--space-5); background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:var(--radius-lg); margin-bottom:var(--space-6); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-3);"
+      >
+        <div style="display:flex; align-items:center; gap:var(--space-3);">
+          <span style="font-size:1.5rem;">🚨</span>
+          <div>
+            <strong style="color:#f87171;">มีการแจ้งปัญหาจากลูกค้าค้างอยู่ {{ ticketsStore.pendingTicketsCount }} รายการ</strong>
+            <div style="font-size:0.8125rem; color:var(--gray-400);">ลูกค้ากำลังรอการตรวจสอบและเปลี่ยนรหัสผ่าน/ส่งมอบบัญชีใหม่</div>
+          </div>
+        </div>
+        <RouterLink to="/admin/tickets" class="btn btn-sm" style="background:rgba(239,68,68,0.25); color:#f87171; border:1px solid rgba(239,68,68,0.4); font-weight:600;">
+          ไปที่หน้าจัดการปัญหา →
+        </RouterLink>
       </div>
 
       <!-- ══════════════════════════════════════════════════════════ -->

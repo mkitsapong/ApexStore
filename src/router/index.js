@@ -29,6 +29,7 @@ const router = createRouter({
     { path: '/admin/orders', name: 'admin-orders', component: () => import('../pages/admin/AdminOrders.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
     { path: '/admin/topups', name: 'admin-topups', component: () => import('../pages/admin/AdminTopups.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
     { path: '/admin/users', name: 'admin-users', component: () => import('../pages/admin/AdminUsers.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
+    { path: '/admin/tickets', name: 'admin-tickets', component: () => import('../pages/admin/AdminTickets.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
     { path: '/admin/settings', name: 'admin-settings', component: () => import('../pages/admin/AdminSettings.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
 
     // 404

@@ -4,6 +4,7 @@ import { verifySlip } from '../services/slipService'
 import { uploadPaymentSlip } from '../services/storage'
 import { useAuthStore } from './auth'
 import { useToastStore } from './toast'
+import { useNotificationsStore } from './notifications'
 import { supabase, isSupabaseConfigured } from '../services/supabase'
 
 export const DEFAULT_PAYMENT_SETTINGS = {
@@ -336,6 +337,18 @@ export const usePaymentStore = defineStore('payment', () => {
       topupLogs.value.unshift(logEntry)
       saveLogs()
 
+      // Send In-App Notification
+      try {
+        const notificationsStore = useNotificationsStore()
+        notificationsStore.addNotification({
+          type: 'topup_success',
+          title: `💰 เติมเงินสำเร็จ ฿${Number(result.amount).toLocaleString()}`,
+          message: `ยอดเงิน ฿${Number(result.amount).toLocaleString()} ได้รับการเติมเข้าสู่ Wallet เรียบร้อยแล้ว`,
+          link: `/wallet`,
+          userId: auth.user?.id
+        })
+      } catch (e) {}
+
       return {
         success: true,
         data: logEntry
@@ -400,6 +413,18 @@ export const usePaymentStore = defineStore('payment', () => {
           console.error('Error updating topup status in Supabase:', err)
         }
       }
+
+      // Send In-App Notification to user
+      try {
+        const notificationsStore = useNotificationsStore()
+        notificationsStore.addNotification({
+          type: 'topup_success',
+          title: `💰 แอดมินอนุมัติการเติมเงิน ฿${Number(log.amount).toLocaleString()}`,
+          message: `ยอดเงิน ฿${Number(log.amount).toLocaleString()} ได้รับการอนุมัติเข้าสู่ Wallet เรียบร้อยแล้ว`,
+          link: `/wallet`,
+          userId: log.user_id
+        })
+      } catch (e) {}
     }
   }
 
