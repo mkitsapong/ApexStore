@@ -2,8 +2,10 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { usePaymentStore } from '../stores/payment'
 
 const auth = useAuthStore()
+const payment = usePaymentStore()
 const router = useRouter()
 const route = useRoute()
 const mobileMenuOpen = ref(false)
@@ -26,13 +28,22 @@ function formatBalance(n) {
 </script>
 
 <template>
-  <nav class="navbar">
-    <div class="container">
-      <div class="navbar-inner">
-        <!-- Logo -->
-        <RouterLink to="/" class="navbar-logo">
-          ⚡ Apex<span>Store</span>
-        </RouterLink>
+  <header>
+    <!-- Announcement Bar -->
+    <div
+      v-if="payment.storeSettings?.showAnnouncement && payment.storeSettings?.announcement"
+      style="background:linear-gradient(90deg, #ea580c 0%, #f97316 100%); color:white; font-size:0.8rem; font-weight:600; text-align:center; padding:5px 12px; display:flex; align-items:center; justify-content:center; gap:8px;"
+    >
+      <span>{{ payment.storeSettings.announcement }}</span>
+    </div>
+
+    <nav class="navbar">
+      <div class="container">
+        <div class="navbar-inner">
+          <!-- Logo -->
+          <RouterLink to="/" class="navbar-logo">
+            ⚡ {{ payment.storeSettings?.storeName || 'ApexStore' }}
+          </RouterLink>
 
         <!-- Desktop Nav -->
         <ul class="navbar-nav">
@@ -79,6 +90,7 @@ function formatBalance(n) {
     <!-- Overlay to close dropdown -->
     <div v-if="userMenuOpen" style="position:fixed;inset:0;z-index:99" @click="userMenuOpen=false"></div>
   </nav>
+  </header>
 </template>
 
 <style scoped>

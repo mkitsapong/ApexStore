@@ -7,12 +7,26 @@ import { useToastStore } from './toast'
 
 
 export const useOrdersStore = defineStore('orders', () => {
+  // ── Security migration: strip any plaintext passwords from previous localStorage ──
+  const _rawOrders = JSON.parse(localStorage.getItem('sp_orders') || 'null')
+  if (_rawOrders && Array.isArray(_rawOrders)) {
+    // Remove account_password from every cached order silently
+    const _cleaned = _rawOrders.map(({ account_password, ...rest }) => rest)
+    localStorage.setItem('sp_orders', JSON.stringify(_cleaned))
+  }
+
   const orders = ref(JSON.parse(localStorage.getItem('sp_orders') || JSON.stringify(mockOrders)))
   const loading = ref(false)
   const error = ref(null)
 
+  // Strip sensitive fields before persisting to localStorage
+  function sanitizeForStorage(order) {
+    const { account_password, ...safe } = order
+    return safe
+  }
+
   function saveLocal() {
-    localStorage.setItem('sp_orders', JSON.stringify(orders.value))
+    localStorage.setItem('sp_orders', JSON.stringify(orders.value.map(sanitizeForStorage)))
   }
 
   /**
@@ -180,7 +194,7 @@ export const useOrdersStore = defineStore('orders', () => {
             amount: newOrder.amount,
             status: newOrder.status,
             account_email: newOrder.account_email,
-            account_password: newOrder.account_password,
+            // account_password is handled separately via set_order_credentials RPC
             expires_at: newOrder.expires_at
           })
           .select()
@@ -189,48 +203,95 @@ export const useOrdersStore = defineStore('orders', () => {
         if (insertError) {
           console.warn('Could not insert order into Supabase, falling back to local:', insertError)
         } else if (data) {
-          orders.value.unshift(data)
+          // Call RPC to encrypt and store the password server-side
+          if (newOrder.account_password) {
+            await supabase.rpc('set_order_credentials', {
+              p_order_id: data.id,
+              p_email:    newOrder.account_email,
+              p_password: newOrder.account_password
+            }).catch(e => console.warn('Could not encrypt password, admin must set manually:', e))
+          }
+          const safeOrder = sanitizeForStorage(data)
+          orders.value.unshift(safeOrder)
           saveLocal()
-          return { success: true, order: data }
+          return { success: true, order: safeOrder }
         }
       } catch (err) {
         console.error('Error creating Supabase order:', err)
       }
     }
 
-    // Local fallback
+    // Local fallback (no password stored locally)
     orders.value.unshift(newOrder)
     saveLocal()
     return { success: true, order: newOrder }
   }
 
   /**
-   * Admin: Approve pending order
+   * Fetch decrypted account credentials on-demand via secure RPC.
+   * Credentials are NEVER stored in localStorage.
    */
-  async function approveOrder(id, accountEmail, accountPassword) {
-    const email = accountEmail || `auto.acc${id.slice(-2)}@example.com`
-    const pass = accountPassword || `Pass${id.slice(-4)}!`
-
+  async function fetchOrderCredentials(orderId) {
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase
-          .from('orders')
-          .update({
-            status: 'completed',
-            account_email: email,
-            account_password: pass
-          })
-          .eq('id', id)
+        const { data, error: rpcError } = await supabase
+          .rpc('get_order_credentials', { p_order_id: orderId })
+
+        if (rpcError) throw rpcError
+        if (data && data.success) {
+          return { success: true, email: data.email, password: data.password }
+        }
+        return { success: false, error: data?.error || 'ไม่สามารถโหลดข้อมูลบัญชีได้' }
       } catch (err) {
-        console.error('Error approving order in Supabase:', err)
+        console.error('Error fetching order credentials:', err)
+        return { success: false, error: err.message }
       }
     }
 
+    // Local fallback: read from in-memory only (never from localStorage)
+    const order = orders.value.find(o => o.id === orderId)
+    if (order?.account_password) {
+      return { success: true, email: order.account_email, password: order.account_password }
+    }
+    return { success: false, error: 'ไม่พบข้อมูลบัญชี (โหมด Offline)' }
+  }
+
+  /**
+   * Admin: Approve pending order — encrypts credentials via Supabase RPC
+   */
+  async function approveOrder(id, accountEmail, accountPassword) {
+    const email = accountEmail || `auto.acc${id.slice(-2)}@example.com`
+    const pass  = accountPassword || `Pass${id.slice(-4)}!`
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        // Use the secure RPC — password is encrypted server-side, never sent as plaintext in response
+        const { data, error: rpcError } = await supabase
+          .rpc('set_order_credentials', {
+            p_order_id: id,
+            p_email:    email,
+            p_password: pass
+          })
+
+        if (rpcError) {
+          console.error('Error setting credentials via RPC:', rpcError)
+          // Fallback: direct update without encryption (degraded mode)
+          await supabase
+            .from('orders')
+            .update({ status: 'completed', account_email: email })
+            .eq('id', id)
+        }
+      } catch (err) {
+        console.error('Error approving order:', err)
+      }
+    }
+
+    // Update in-memory state (do NOT store password)
     const o = orders.value.find(item => item.id === id)
     if (o) {
       o.status = 'completed'
       o.account_email = email
-      o.account_password = pass
+      // account_password is intentionally NOT stored in local state
       saveLocal()
     }
   }
@@ -269,6 +330,7 @@ export const useOrdersStore = defineStore('orders', () => {
     fetchAllOrders,
     subscribeToOrders,
     createOrder,
+    fetchOrderCredentials,
     approveOrder,
     rejectOrder,
     getOrderById

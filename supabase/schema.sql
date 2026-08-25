@@ -5,6 +5,7 @@
 
 -- 1. Create Extensions
 create extension if not exists "uuid-ossp";
+create extension if not exists "pgcrypto";
 
 -- 2. Create Profiles Table (Linked to auth.users)
 create table if not exists public.profiles (
@@ -181,9 +182,9 @@ create policy "Users can insert topups" on public.topup_transactions
 create policy "Admins can update topups" on public.topup_transactions
   for update using (public.is_admin());
 
--- App Settings Policies
-create policy "Anyone can view settings" on public.app_settings
-  for select using (true);
+-- App Settings Policies (Public can view non-secret settings, Admins can view and manage all)
+create policy "Anyone can view public settings" on public.app_settings
+  for select using (key != 'encryption_settings' or public.is_admin());
 
 create policy "Admins can manage settings" on public.app_settings
   for all using (public.is_admin());
@@ -191,6 +192,116 @@ create policy "Admins can manage settings" on public.app_settings
 -- ========================================================
 -- Stored Procedures / RPC Functions
 -- ========================================================
+
+-- Helper: Get Encryption Secret (security definer, non-accessible by public)
+create or replace function public.get_encryption_secret()
+returns text
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select value->>'secret'
+  from public.app_settings
+  where key = 'encryption_settings'
+  limit 1;
+$$;
+
+-- Revoke direct access from regular users (only called internally by other security definer functions)
+revoke execute on function public.get_encryption_secret() from anon, authenticated;
+
+-- RPC: Encrypt and Save Account Credentials (Admin Only)
+create or replace function public.set_order_credentials(
+  p_order_id text,
+  p_email text,
+  p_password text
+)
+returns boolean
+language plpgsql
+security definer
+as $$
+declare
+  v_secret text;
+begin
+  -- Only admin can set credentials
+  if not public.is_admin() then
+    raise exception 'ไม่มีสิทธิ์ดำเนินการนี้';
+  end if;
+
+  select public.get_encryption_secret() into v_secret;
+
+  if v_secret is null or length(v_secret) < 16 then
+    raise exception 'Encryption secret is not configured';
+  end if;
+
+  update public.orders
+  set
+    account_email    = p_email,
+    account_password = encode(
+      pgp_sym_encrypt(p_password, v_secret, 'compress-algo=1, cipher-algo=aes256'),
+      'base64'
+    ),
+    status           = 'completed'
+  where id = p_order_id;
+
+  return found;
+end;
+$$;
+
+-- RPC: Decrypt and Return Account Credentials (Owner or Admin)
+create or replace function public.get_order_credentials(p_order_id text)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_order       public.orders%ROWTYPE;
+  v_secret      text;
+  v_plain_pass  text;
+begin
+  select * into v_order
+  from public.orders
+  where id = p_order_id;
+
+  -- Not found
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'ไม่พบคำสั่งซื้อ');
+  end if;
+
+  -- Auth check: must be owner or admin
+  if v_order.user_id != auth.uid() and not public.is_admin() then
+    return jsonb_build_object('success', false, 'error', 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
+  end if;
+
+  -- Order must be completed
+  if v_order.status != 'completed' then
+    return jsonb_build_object('success', false, 'error', 'คำสั่งซื้อยังไม่สำเร็จ');
+  end if;
+
+  select public.get_encryption_secret() into v_secret;
+
+  if v_secret is null then
+    return jsonb_build_object('success', false, 'error', 'ระบบยังไม่พร้อม กรุณาติดต่อ Admin');
+  end if;
+
+  -- Try to decrypt (password may be plaintext for legacy rows)
+  begin
+    v_plain_pass := pgp_sym_decrypt(
+      decode(v_order.account_password, 'base64'),
+      v_secret
+    );
+  exception when others then
+    -- Legacy plaintext fallback
+    v_plain_pass := v_order.account_password;
+  end;
+
+  return jsonb_build_object(
+    'success',  true,
+    'email',    v_order.account_email,
+    'password', v_plain_pass
+  );
+end;
+$$;
 
 -- Adjust User Balance Safely
 create or replace function public.add_user_balance(p_user_id uuid, p_amount numeric)
@@ -450,6 +561,30 @@ values (
 )
 on conflict (key) do nothing;
 
+-- Insert Encryption Settings (CHANGE secret BEFORE going to production!)
+insert into public.app_settings (key, value)
+values (
+  'encryption_settings',
+  '{"secret": "CHANGE_THIS_SECRET_KEY_MIN_32_CHARS_LONG_abc123"}'
+)
+on conflict (key) do nothing;
+
+-- Insert Default Store Branding Settings
+insert into public.app_settings (key, value)
+values (
+  'store_settings',
+  '{
+    "storeName": "ApexStore Premium",
+    "storeTagline": "ศูนย์รวมบริการดิจิทัลระดับพรีเมียม ส่งมอบทันที 24 ชั่วโมง",
+    "contactLine": "@apexstore",
+    "contactEmail": "support@apexstore.com",
+    "announcement": "🎉 ยินดีต้อนรับสู่ ApexStore ระบบเติมเงินออโต้ 24 ชม. ปลอดภัย รวดเร็ว!",
+    "showAnnouncement": true,
+    "maintenanceMode": false
+  }'::jsonb
+)
+on conflict (key) do nothing;
+
 -- ========================================================
 -- Storage Buckets & Policies
 -- ========================================================
@@ -523,6 +658,14 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'products'
   ) then
     alter publication supabase_realtime add table public.products;
+  end if;
+
+  -- Add app_settings to realtime
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'app_settings'
+  ) then
+    alter publication supabase_realtime add table public.app_settings;
   end if;
 end $$;
 

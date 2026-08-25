@@ -20,12 +20,40 @@ onMounted(() => {
 const order = computed(() => ordersStore.getOrderById(route.params.id))
 
 const showCreds = ref(false)
-const copied = ref(false)
+const credsLoading = ref(false)
+const credentials = ref(null)   // { email, password } — in-memory only, never persisted
+const credsError = ref(null)
 
 const statusConfig = {
   completed: { label: 'สำเร็จ', badgeClass: 'badge-success', emoji: '✅' },
   pending: { label: 'รอดำเนินการ', badgeClass: 'badge-warning', emoji: '⏳' },
   rejected: { label: 'ถูกปฏิเสธ', badgeClass: 'badge-danger', emoji: '❌' },
+}
+
+async function toggleCreds() {
+  if (showCreds.value) {
+    // Hide credentials and clear from memory
+    showCreds.value = false
+    credentials.value = null
+    credsError.value = null
+    return
+  }
+  // Fetch from Supabase RPC
+  credsLoading.value = true
+  credsError.value = null
+  try {
+    const result = await ordersStore.fetchOrderCredentials(order.value.id)
+    if (result.success) {
+      credentials.value = { email: result.email, password: result.password }
+      showCreds.value = true
+    } else {
+      credsError.value = result.error
+    }
+  } catch (e) {
+    credsError.value = e.message
+  } finally {
+    credsLoading.value = false
+  }
 }
 
 function copyText(text) {
@@ -86,24 +114,39 @@ function copyText(text) {
           <div v-if="order.status === 'completed'" class="card" style="border-color:rgba(34,197,94,0.3);">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-4);">
               <h3>🔑 ข้อมูลบัญชี</h3>
-              <button class="btn btn-secondary btn-sm" @click="showCreds = !showCreds">
-                {{ showCreds ? '🙈 ซ่อน' : '👁️ แสดง' }}
+              <button
+                class="btn btn-secondary btn-sm"
+                @click="toggleCreds"
+                :disabled="credsLoading"
+                id="toggle-credentials-btn"
+              >
+                <span v-if="credsLoading">⏳ กำลังโหลด...</span>
+                <span v-else-if="showCreds">🙈 ซ่อน</span>
+                <span v-else>👁️ แสดง</span>
               </button>
             </div>
 
-            <div v-if="showCreds" style="display:flex; flex-direction:column; gap:var(--space-3);">
+            <!-- Error state -->
+            <div
+              v-if="credsError"
+              style="padding:var(--space-3); background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:var(--radius-md); font-size:0.875rem; color:#f87171;"
+            >
+              ⚠️ {{ credsError }}
+            </div>
+
+            <div v-else-if="showCreds && credentials" style="display:flex; flex-direction:column; gap:var(--space-3);">
               <div style="padding:var(--space-4); background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2); border-radius:var(--radius-md);">
                 <div style="font-size:0.75rem; color:var(--gray-500); margin-bottom:var(--space-2);">EMAIL / USERNAME</div>
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);">
-                  <code style="color:#4ade80; font-size:0.9375rem; font-family:monospace;">{{ order.account_email }}</code>
-                  <button class="btn btn-secondary btn-sm" @click="copyText(order.account_email)">📋</button>
+                  <code style="color:#4ade80; font-size:0.9375rem; font-family:monospace;">{{ credentials.email }}</code>
+                  <button class="btn btn-secondary btn-sm" @click="copyText(credentials.email)">📋</button>
                 </div>
               </div>
               <div style="padding:var(--space-4); background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2); border-radius:var(--radius-md);">
                 <div style="font-size:0.75rem; color:var(--gray-500); margin-bottom:var(--space-2);">PASSWORD</div>
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);">
-                  <code style="color:#4ade80; font-size:0.9375rem; font-family:monospace;">{{ order.account_password }}</code>
-                  <button class="btn btn-secondary btn-sm" @click="copyText(order.account_password)">📋</button>
+                  <code style="color:#4ade80; font-size:0.9375rem; font-family:monospace;">{{ credentials.password }}</code>
+                  <button class="btn btn-secondary btn-sm" @click="copyText(credentials.password)">📋</button>
                 </div>
               </div>
               <div style="padding:var(--space-3); background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.2); border-radius:var(--radius-md); font-size:0.8125rem; color:#facc15;">
@@ -112,7 +155,7 @@ function copyText(text) {
             </div>
 
             <div v-else style="text-align:center; padding:var(--space-6); color:var(--gray-500); font-size:0.875rem;">
-              🔒 คลิก "แสดง" เพื่อดูข้อมูลบัญชี
+              🔒 คลิก "แสดง" เพื่อดูข้อมูลบัญชี (โหลดแบบเข้ารหัสทุกครั้ง)
             </div>
           </div>
 

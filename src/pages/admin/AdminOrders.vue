@@ -14,12 +14,50 @@ onMounted(() => {
 })
 
 const orders = computed(() => ordersStore.orders)
-
 const filtered = () => filterStatus.value === 'all' ? orders.value : orders.value.filter(o => o.status === filterStatus.value)
 
-async function approve(id) {
-  await ordersStore.approveOrder(id)
-  toast.success('อนุมัติคำสั่งซื้อสำเร็จ')
+// ─── Approve Modal ───────────────────────────────────────────────
+const approveModal = ref(false)
+const approveTarget = ref(null)   // order being approved
+const approveEmail = ref('')
+const approvePassword = ref('')
+const approveLoading = ref(false)
+const showApprovePassword = ref(false)
+
+function openApproveModal(order) {
+  approveTarget.value = order
+  approveEmail.value = ''
+  approvePassword.value = ''
+  showApprovePassword.value = false
+  approveModal.value = true
+}
+
+function closeApproveModal() {
+  approveModal.value = false
+  approveTarget.value = null
+  approveEmail.value = ''
+  approvePassword.value = ''
+}
+
+async function submitApprove() {
+  if (!approveEmail.value.trim() || !approvePassword.value.trim()) {
+    toast.error('กรุณากรอก Email และ Password ให้ครบ')
+    return
+  }
+  approveLoading.value = true
+  try {
+    await ordersStore.approveOrder(
+      approveTarget.value.id,
+      approveEmail.value.trim(),
+      approvePassword.value.trim()
+    )
+    toast.success('✅ อนุมัติและเข้ารหัสข้อมูลบัญชีสำเร็จ')
+    closeApproveModal()
+  } catch (e) {
+    toast.error('เกิดข้อผิดพลาด: ' + e.message)
+  } finally {
+    approveLoading.value = false
+  }
 }
 
 async function reject(id) {
@@ -27,9 +65,8 @@ async function reject(id) {
   toast.success('ปฏิเสธคำสั่งซื้อแล้ว')
 }
 
-
 const statusBadge = { completed: 'badge-success', pending: 'badge-warning', rejected: 'badge-danger' }
-const statusLabel = { completed: 'สำเร็จ', pending: 'รอดำเนินการ', rejected: 'ถูกปฏิเสธ' }
+const statusLabel  = { completed: 'สำเร็จ', pending: 'รอดำเนินการ', rejected: 'ถูกปฏิเสธ' }
 </script>
 
 <template>
@@ -68,7 +105,12 @@ const statusLabel = { completed: 'สำเร็จ', pending: 'รอดำเ
               <td><span :class="['badge', statusBadge[o.status]]">{{ statusLabel[o.status] }}</span></td>
               <td>
                 <div v-if="o.status === 'pending'" style="display:flex; gap:var(--space-2);">
-                  <button class="btn btn-sm" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3);" @click="approve(o.id)" :id="`approve-${o.id}`">✅ อนุมัติ</button>
+                  <button
+                    class="btn btn-sm"
+                    style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3);"
+                    @click="openApproveModal(o)"
+                    :id="`approve-${o.id}`"
+                  >✅ อนุมัติ</button>
                   <button class="btn btn-sm" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3);" @click="reject(o.id)">❌ ปฏิเสธ</button>
                 </div>
                 <span v-else style="font-size:0.8125rem; color:var(--gray-600);">—</span>
@@ -78,5 +120,79 @@ const statusLabel = { completed: 'สำเร็จ', pending: 'รอดำเ
         </table>
       </div>
     </div>
+
+    <!-- ─── Approve Modal ─────────────────────────────────────── -->
+    <Teleport to="body">
+      <div
+        v-if="approveModal"
+        style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:var(--space-4);"
+        @click.self="closeApproveModal"
+      >
+        <div style="background:var(--bg-card);border:1px solid var(--glass-border);border-radius:var(--radius-xl);padding:var(--space-8);width:100%;max-width:480px;">
+          <h3 style="margin-bottom:var(--space-2);">🔐 กรอกข้อมูลบัญชี</h3>
+          <p style="color:var(--gray-500);font-size:0.875rem;margin-bottom:var(--space-6);">
+            ข้อมูลจะถูก <strong style="color:#4ade80;">เข้ารหัส AES-256</strong> ก่อนบันทึกลงฐานข้อมูล<br>
+            Order: <code style="font-family:monospace;color:var(--accent-400);">{{ approveTarget?.id }}</code>
+          </p>
+
+          <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+            <div>
+              <label style="font-size:0.875rem;color:var(--gray-400);display:block;margin-bottom:var(--space-2);">Email / Username</label>
+              <input
+                v-model="approveEmail"
+                type="email"
+                class="input"
+                placeholder="user@example.com"
+                id="approve-email-input"
+                style="width:100%;"
+              />
+            </div>
+
+            <div>
+              <label style="font-size:0.875rem;color:var(--gray-400);display:block;margin-bottom:var(--space-2);">Password</label>
+              <div style="position:relative;">
+                <input
+                  v-model="approvePassword"
+                  :type="showApprovePassword ? 'text' : 'password'"
+                  class="input"
+                  placeholder="รหัสผ่านบัญชี"
+                  id="approve-password-input"
+                  style="width:100%;padding-right:3rem;"
+                />
+                <button
+                  type="button"
+                  @click="showApprovePassword = !showApprovePassword"
+                  style="position:absolute;right:var(--space-3);top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:1.1rem;"
+                >{{ showApprovePassword ? '🙈' : '👁️' }}</button>
+              </div>
+            </div>
+
+            <div style="padding:var(--space-3);background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:var(--radius-md);font-size:0.8rem;color:var(--gray-400);">
+              🔒 รหัสผ่านจะถูกเข้ารหัสด้วย pgcrypto AES-256 ทันทีที่กด "อนุมัติ" — ไม่มีการเก็บ plaintext ในระบบ
+            </div>
+
+            <div style="display:flex;gap:var(--space-3);margin-top:var(--space-2);">
+              <button
+                class="btn btn-secondary"
+                style="flex:1;"
+                @click="closeApproveModal"
+                :disabled="approveLoading"
+              >ยกเลิก</button>
+              <button
+                class="btn"
+                style="flex:2;background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.3);"
+                @click="submitApprove"
+                :disabled="approveLoading"
+                id="submit-approve-btn"
+              >
+                <span v-if="approveLoading">⏳ กำลังเข้ารหัสและบันทึก...</span>
+                <span v-else>✅ อนุมัติ & เข้ารหัส</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </AdminLayout>
 </template>
+

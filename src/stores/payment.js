@@ -6,21 +6,35 @@ import { useAuthStore } from './auth'
 import { useToastStore } from './toast'
 import { supabase, isSupabaseConfigured } from '../services/supabase'
 
+export const DEFAULT_PAYMENT_SETTINGS = {
+  promptPayId: '0812345678',
+  promptPayName: 'ร้าน ApexStore (Official)',
+  promptPayType: 'phone', // 'phone' | 'national_id'
+  slipokApiKey: '',
+  isAutoVerify: true,
+  isDemoMode: true,
+  minTopupAmount: 20,
+  maxTopupAmount: 50000
+}
+
+export const DEFAULT_STORE_SETTINGS = {
+  storeName: 'ApexStore Premium',
+  storeTagline: 'ศูนย์รวมบริการดิจิทัลระดับพรีเมียม ส่งมอบทันที 24 ชั่วโมง',
+  contactLine: '@apexstore',
+  contactEmail: 'support@apexstore.com',
+  announcement: '🎉 ยินดีต้อนรับสู่ ApexStore ระบบเติมเงินออโต้ 24 ชม. ปลอดภัย รวดเร็ว!',
+  showAnnouncement: true,
+  maintenanceMode: false
+}
 
 export const usePaymentStore = defineStore('payment', () => {
   const auth = useAuthStore()
 
-  // PromptPay and SlipOK Settings (persisted in localStorage)
-  const settings = ref(JSON.parse(localStorage.getItem('sp_payment_settings') || JSON.stringify({
-    promptPayId: '0812345678',
-    promptPayName: 'ร้าน ApexStore (Official)',
-    promptPayType: 'phone', // 'phone' | 'national_id'
-    slipokApiKey: '',
-    isAutoVerify: true,
-    isDemoMode: true,
-    minTopupAmount: 20,
-    maxTopupAmount: 50000
-  })))
+  // PromptPay and SlipOK Settings (persisted in localStorage with default fallback)
+  const settings = ref(JSON.parse(localStorage.getItem('sp_payment_settings') || JSON.stringify(DEFAULT_PAYMENT_SETTINGS)))
+
+  // General Store Branding & Config Settings
+  const storeSettings = ref(JSON.parse(localStorage.getItem('sp_store_settings') || JSON.stringify(DEFAULT_STORE_SETTINGS)))
 
   // Used Transaction References to prevent duplicate slips
   const usedTransRefs = ref(JSON.parse(localStorage.getItem('sp_used_trans_refs') || '[]'))
@@ -28,18 +42,103 @@ export const usePaymentStore = defineStore('payment', () => {
   // Slip Top-up verification logs
   const topupLogs = ref(JSON.parse(localStorage.getItem('sp_topup_logs') || '[]'))
   const loading = ref(false)
+  const settingsLoading = ref(false)
 
-  function saveSettings(newSettings) {
+  /**
+   * Fetch payment and store settings from Supabase app_settings
+   */
+  async function fetchSettings() {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        settingsLoading.value = true
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('key, value')
+          .in('key', ['payment_settings', 'store_settings'])
+
+        if (error) throw error
+
+        if (data && data.length > 0) {
+          const payData = data.find(item => item.key === 'payment_settings')
+          if (payData && payData.value) {
+            settings.value = { ...DEFAULT_PAYMENT_SETTINGS, ...payData.value }
+            localStorage.setItem('sp_payment_settings', JSON.stringify(settings.value))
+          }
+
+          const storeData = data.find(item => item.key === 'store_settings')
+          if (storeData && storeData.value) {
+            storeSettings.value = { ...DEFAULT_STORE_SETTINGS, ...storeData.value }
+            localStorage.setItem('sp_store_settings', JSON.stringify(storeSettings.value))
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch settings from Supabase, using cached/defaults:', err)
+      } finally {
+        settingsLoading.value = false
+      }
+    }
+    return { payment: settings.value, store: storeSettings.value }
+  }
+
+  /**
+   * Save payment settings to state, localStorage, and Supabase
+   */
+  async function saveSettings(newSettings) {
     settings.value = { ...settings.value, ...newSettings }
     localStorage.setItem('sp_payment_settings', JSON.stringify(settings.value))
 
     if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('app_settings')
-        .upsert({ key: 'payment_settings', value: settings.value, updated_at: new Date().toISOString() })
-        .then(() => {})
-        .catch(err => console.error('Error saving settings to Supabase:', err))
+      try {
+        const { error } = await supabase
+          .from('app_settings')
+          .upsert({
+            key: 'payment_settings',
+            value: settings.value,
+            updated_at: new Date().toISOString()
+          })
+
+        if (error) throw error
+        return { success: true }
+      } catch (err) {
+        console.error('Error saving payment settings to Supabase:', err)
+        throw err
+      }
     }
+    return { success: true }
+  }
+
+  /**
+   * Save general store settings
+   */
+  async function saveStoreSettings(newStoreSettings) {
+    storeSettings.value = { ...storeSettings.value, ...newStoreSettings }
+    localStorage.setItem('sp_store_settings', JSON.stringify(storeSettings.value))
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('app_settings')
+          .upsert({
+            key: 'store_settings',
+            value: storeSettings.value,
+            updated_at: new Date().toISOString()
+          })
+
+        if (error) throw error
+        return { success: true }
+      } catch (err) {
+        console.error('Error saving store settings to Supabase:', err)
+        throw err
+      }
+    }
+    return { success: true }
+  }
+
+  /**
+   * Reset payment settings to defaults
+   */
+  async function resetSettings() {
+    return await saveSettings(DEFAULT_PAYMENT_SETTINGS)
   }
 
   function saveLogs() {
@@ -51,6 +150,40 @@ export const usePaymentStore = defineStore('payment', () => {
   }
 
   let topupChannel = null
+  let settingsChannel = null
+
+  /**
+   * Subscribe to live Realtime updates on app_settings
+   */
+  function subscribeToSettings() {
+    if (!isSupabaseConfigured || !supabase) return
+
+    if (settingsChannel) {
+      supabase.removeChannel(settingsChannel)
+      settingsChannel = null
+    }
+
+    settingsChannel = supabase
+      .channel('app-settings-live')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'app_settings'
+        },
+        (payload) => {
+          if (payload.new && payload.new.key === 'payment_settings') {
+            settings.value = { ...DEFAULT_PAYMENT_SETTINGS, ...payload.new.value }
+            localStorage.setItem('sp_payment_settings', JSON.stringify(settings.value))
+          } else if (payload.new && payload.new.key === 'store_settings') {
+            storeSettings.value = { ...DEFAULT_STORE_SETTINGS, ...payload.new.value }
+            localStorage.setItem('sp_store_settings', JSON.stringify(storeSettings.value))
+          }
+        }
+      )
+      .subscribe()
+  }
 
   /**
    * Subscribe to live Realtime updates on topup_transactions
@@ -294,14 +427,21 @@ export const usePaymentStore = defineStore('payment', () => {
 
   return {
     settings,
+    storeSettings,
     usedTransRefs,
     topupLogs,
     loading,
+    settingsLoading,
+    fetchSettings,
+    subscribeToSettings,
     fetchTopups,
     subscribeToTopups,
     saveSettings,
+    saveStoreSettings,
+    resetSettings,
     processSlipTopup,
     manualApprove,
     manualReject
   }
 })
+

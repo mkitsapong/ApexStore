@@ -38,6 +38,11 @@ const formattedCountdown = computed(() => {
   return `${m}:${s}`
 })
 
+onMounted(async () => {
+  await payment.fetchSettings()
+  payment.subscribeToSettings()
+})
+
 function selectPreset(val) {
   amount.value = val
 }

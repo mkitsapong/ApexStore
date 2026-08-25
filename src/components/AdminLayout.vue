@@ -13,6 +13,7 @@ const menuItems = [
   { path: '/admin/orders', label: 'คำสั่งซื้อ', emoji: '📦' },
   { path: '/admin/topups', label: 'เติมเงิน', emoji: '💳', badge: 2 },
   { path: '/admin/users', label: 'ผู้ใช้', emoji: '👥' },
+  { path: '/admin/settings', label: 'ตั้งค่าระบบ', emoji: '⚙️' },
 ]
 
 function isActive(item) {

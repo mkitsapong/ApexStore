@@ -11,6 +11,7 @@ const toast = useToastStore()
 
 onMounted(() => {
   payment.fetchTopups()
+  payment.fetchSettings()
 })
 
 const filterStatus = ref('all')
@@ -94,9 +95,9 @@ const statusLabel = {
           <h1 style="font-size:1.75rem; margin-bottom:var(--space-1);">จัดการระบบเติมเงิน (PromptPay & Slips)</h1>
           <p style="color:var(--gray-400);">ตรวจสอบรายการเติมเงิน สลิปโอนเงิน และตั้งค่าระบบ Auto-Verify</p>
         </div>
-        <button class="btn btn-primary" @click="openSettings" id="btn-payment-settings">
+        <RouterLink to="/admin/settings" class="btn btn-primary" id="btn-payment-settings">
           ⚙️ ตั้งค่า PromptPay & SlipOK
-        </button>
+        </RouterLink>
       </div>
 
       <!-- Stats Grid -->
