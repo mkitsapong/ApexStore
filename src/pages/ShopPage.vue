@@ -2,10 +2,19 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useProductsStore } from '../stores/products'
+import { useCartStore } from '../stores/cart'
 
 const router = useRouter()
 const route = useRoute()
 const productsStore = useProductsStore()
+const cart = useCartStore()
+
+function quickAddToCart(e, product) {
+  e.stopPropagation()
+  if (!product.is_available) return
+  const defaultPkg = product.packages?.[0] || null
+  cart.addItem(product, defaultPkg, 1, true)
+}
 
 const searchQuery = ref('')
 const selectedCategory = ref(route.query.cat || 'all')
@@ -137,13 +146,24 @@ const filtered = computed(() => {
                 <div class="price-main">฿{{ p.price }}</div>
                 <div class="price-strike">฿{{ p.original_price }}</div>
               </div>
-              <button
-                :class="['btn btn-sm', p.is_available ? 'btn-primary' : 'btn-secondary']"
-                :disabled="!p.is_available"
-                style="box-shadow:none;"
-              >
-                {{ p.is_available ? 'สั่งซื้อเลย 🛒' : 'สินค้าหมด' }}
-              </button>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button
+                  v-if="p.is_available"
+                  class="btn btn-secondary btn-icon btn-sm"
+                  @click="quickAddToCart($event, p)"
+                  title="ใส่ตะกร้าทันที"
+                  style="width:34px; height:34px; border-color:rgba(249,115,22,0.4); background:rgba(249,115,22,0.1);"
+                >
+                  🛒
+                </button>
+                <button
+                  :class="['btn btn-sm', p.is_available ? 'btn-primary' : 'btn-secondary']"
+                  :disabled="!p.is_available"
+                  style="box-shadow:none;"
+                >
+                  {{ p.is_available ? 'สั่งซื้อเลย' : 'สินค้าหมด' }}
+                </button>
+              </div>
             </div>
           </div>
         </div>

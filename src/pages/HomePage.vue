@@ -2,10 +2,19 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProductsStore } from '../stores/products'
+import { useCartStore } from '../stores/cart'
 import { mockReviews } from '../data/mockData'
 
 const router = useRouter()
 const productsStore = useProductsStore()
+const cart = useCartStore()
+
+function quickAddToCart(e, product) {
+  e.stopPropagation()
+  if (!product.is_available) return
+  const defaultPkg = product.packages?.[0] || null
+  cart.addItem(product, defaultPkg, 1, true)
+}
 
 const featured = computed(() => productsStore.products.filter(p => p.is_available).slice(0, 4))
 const categories = computed(() => [
@@ -179,9 +188,19 @@ const steps = [
                   <div class="product-price">฿{{ p.price }}</div>
                   <div class="product-original-price">฿{{ p.original_price }}</div>
                 </div>
-                <button class="btn btn-primary btn-sm" style="box-shadow:none;">
-                  ซื้อเลย 🛒
-                </button>
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <button
+                    class="btn btn-secondary btn-icon btn-sm"
+                    @click="quickAddToCart($event, p)"
+                    title="ใส่ตะกร้าทันที"
+                    style="width:34px; height:34px; border-color:rgba(249,115,22,0.4); background:rgba(249,115,22,0.1);"
+                  >
+                    🛒
+                  </button>
+                  <button class="btn btn-primary btn-sm" style="box-shadow:none;">
+                    สั่งซื้อ
+                  </button>
+                </div>
               </div>
             </div>
           </div>

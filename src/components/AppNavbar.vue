@@ -5,12 +5,14 @@ import { useAuthStore } from '../stores/auth'
 import { usePaymentStore } from '../stores/payment'
 import { useNotificationsStore, NOTIFICATION_TYPES } from '../stores/notifications'
 import { useOrdersStore } from '../stores/orders'
+import { useCartStore } from '../stores/cart'
 import { formatDateTime } from '../data/mockData'
 
 const auth = useAuthStore()
 const payment = usePaymentStore()
 const notificationsStore = useNotificationsStore()
 const ordersStore = useOrdersStore()
+const cart = useCartStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -126,6 +128,25 @@ const filteredNotifications = computed(() => {
             >
               💰 {{ formatBalance(auth.balance) }}
             </div>
+
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <!-- 🛒 SHOPPING CART BUTTON & BADGE                           -->
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <button
+              class="btn btn-secondary btn-icon cart-nav-btn"
+              @click="cart.openCart"
+              id="btn-navbar-cart"
+              title="ตะกร้าสินค้า"
+              aria-label="ตะกร้าสินค้า"
+            >
+              <span style="font-size:1.2rem;">🛒</span>
+              <span
+                v-if="cart.totalItems > 0"
+                class="cart-nav-badge"
+              >
+                {{ cart.totalItems > 99 ? '99+' : cart.totalItems }}
+              </span>
+            </button>
 
             <!-- ══════════════════════════════════════════════════════════ -->
             <!-- NOTIFICATION BELL & DROPDOWN                               -->
@@ -299,8 +320,18 @@ const filteredNotifications = computed(() => {
             <span>🏠</span> หน้าหลัก
           </RouterLink>
           <RouterLink to="/shop" class="mobile-nav-link" :class="{ active: isActive('/shop') }" @click="closeMobileMenu">
-            <span>🛒</span> ร้านค้าสินค้าทั้งหมด
+            <span>🏪</span> ร้านค้าสินค้าทั้งหมด
           </RouterLink>
+          <button
+            class="mobile-nav-link"
+            style="background:transparent; border:none; width:100%; text-align:left; cursor:pointer;"
+            @click="closeMobileMenu(); cart.openCart()"
+          >
+            <span>🛒</span> ตะกร้าสินค้า
+            <span v-if="cart.totalItems > 0" class="badge badge-accent" style="margin-left:auto; font-size:0.75rem;">
+              {{ cart.totalItems }}
+            </span>
+          </button>
 
           <template v-if="auth.isLoggedIn">
             <div class="mobile-menu-section-title" style="margin-top:var(--space-4);">สมาชิก</div>
@@ -693,6 +724,50 @@ const filteredNotifications = computed(() => {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
   border-top: 1px solid var(--glass-border);
+}
+
+.cart-nav-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.cart-nav-btn:hover {
+  border-color: var(--accent-400);
+  background: var(--glass-hover);
+  transform: translateY(-1px);
+}
+
+.cart-nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: var(--accent-500);
+  color: var(--white);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  font-family: var(--font-en);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #081120;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.6);
+  animation: cartBadgePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes cartBadgePop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
 @media (max-width: 768px) {

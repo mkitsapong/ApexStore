@@ -4,12 +4,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { useProductsStore } from '../stores/products'
 import { useAuthStore } from '../stores/auth'
 import { useOrdersStore } from '../stores/orders'
+import { useCartStore } from '../stores/cart'
 import { useToastStore } from '../stores/toast'
 
 const route = useRoute()
 const router = useRouter()
 const productsStore = useProductsStore()
 const ordersStore = useOrdersStore()
+const cart = useCartStore()
 const auth = useAuthStore()
 const toast = useToastStore()
 
@@ -33,6 +35,18 @@ watch(product, (newVal) => {
 
 function selectPkg(pkg) {
   selectedPkg.value = pkg
+}
+
+function handleAddToCart() {
+  if (!product.value?.is_available) {
+    toast.error('ขออภัย สินค้านี้หมดสต็อกชั่วคราว')
+    return
+  }
+  if (!selectedPkg.value) {
+    toast.error('กรุณาเลือกแพ็กเกจก่อน')
+    return
+  }
+  cart.addItem(product.value, selectedPkg.value, 1, true)
 }
 
 async function handleBuy() {
@@ -239,16 +253,28 @@ const relatedProducts = computed(() =>
               </RouterLink>
             </div>
 
-            <!-- Buy Action Button -->
-            <button
-              class="btn btn-primary w-full btn-lg"
-              :disabled="!product.is_available || !selectedPkg"
-              @click="handleBuy"
-              style="width:100%; margin-top:var(--space-2);"
-              id="buy-now-btn"
-            >
-              {{ !product.is_available ? '❌ สินค้าหมดชั่วคราว' : !selectedPkg ? 'กรุณาเลือกแพ็กเกจ' : `🛒 สั่งซื้อทันที ฿${selectedPkg.price}` }}
-            </button>
+            <!-- Buy Action Buttons -->
+            <div style="display:flex; flex-direction:column; gap:var(--space-2); margin-top:var(--space-3);">
+              <button
+                class="btn btn-secondary w-full btn-lg"
+                :disabled="!product.is_available || !selectedPkg"
+                @click="handleAddToCart"
+                id="add-to-cart-btn"
+                style="width:100%; border-color:rgba(249,115,22,0.4); background:rgba(249,115,22,0.08); font-weight:700;"
+              >
+                🛒 เพิ่มลงตะกร้า (Add to Cart)
+              </button>
+
+              <button
+                class="btn btn-primary w-full btn-lg"
+                :disabled="!product.is_available || !selectedPkg"
+                @click="handleBuy"
+                style="width:100%; font-weight:800;"
+                id="buy-now-btn"
+              >
+                {{ !product.is_available ? '❌ สินค้าหมดชั่วคราว' : !selectedPkg ? 'กรุณาเลือกแพ็กเกจ' : `⚡ สั่งซื้อทันที ฿${selectedPkg.price}` }}
+              </button>
+            </div>
 
             <!-- Trust Guarantees -->
             <div class="guarantee-list">

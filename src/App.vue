@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import AppNavbar from './components/AppNavbar.vue'
 import AppFooter from './components/AppFooter.vue'
 import ToastContainer from './components/ToastContainer.vue'
+import CartDrawer from './components/CartDrawer.vue'
 
 const route = useRoute()
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
@@ -21,6 +22,9 @@ const isAuthRoute = computed(() => route.path.startsWith('/auth'))
 
     <!-- Footer: show on public pages -->
     <AppFooter v-if="!isAdminRoute && !isAuthRoute && !isDashboardRoute" />
+
+    <!-- Global Cart Drawer -->
+    <CartDrawer />
 
     <!-- Toast Notifications -->
     <ToastContainer />
