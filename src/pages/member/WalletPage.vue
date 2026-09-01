@@ -90,9 +90,9 @@ const filteredTransactions = computed(() => {
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase()
     list = list.filter(tx =>
-      tx.title.toLowerCase().includes(q) ||
-      tx.description.toLowerCase().includes(q) ||
-      (tx.referenceId && tx.referenceId.toLowerCase().includes(q))
+      (tx.title || '').toLowerCase().includes(q) ||
+      (tx.description || '').toLowerCase().includes(q) ||
+      (tx.referenceId && String(tx.referenceId).toLowerCase().includes(q))
     )
   }
 

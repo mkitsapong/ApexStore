@@ -235,7 +235,7 @@ export const useOrdersStore = defineStore('orders', () => {
     }
 
     // Local fallback (no password stored locally)
-    orders.value.unshift(newOrder)
+    orders.value.unshift(sanitizeForStorage(newOrder))
     saveLocal()
 
     try {
@@ -322,8 +322,9 @@ export const useOrdersStore = defineStore('orders', () => {
         }
 
         // Local fallback
-        orders.value.unshift(newOrder)
-        createdOrders.push(newOrder)
+        const safeFallbackOrder = sanitizeForStorage(newOrder)
+        orders.value.unshift(safeFallbackOrder)
+        createdOrders.push(safeFallbackOrder)
       }
     }
 

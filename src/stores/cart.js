@@ -8,7 +8,16 @@ export const useCartStore = defineStore('cart', () => {
   const auth = useAuthStore()
 
   // Cart items state with localStorage persistence
-  const items = ref(JSON.parse(localStorage.getItem('sp_cart') || '[]'))
+  let _savedCart = []
+  try {
+    _savedCart = JSON.parse(localStorage.getItem('sp_cart') || '[]')
+    if (!Array.isArray(_savedCart)) _savedCart = []
+  } catch {
+    console.warn('Cart data in localStorage is corrupted, resetting.')
+    _savedCart = []
+    localStorage.removeItem('sp_cart')
+  }
+  const items = ref(_savedCart)
   const isOpen = ref(false)
   const isCheckingOut = ref(false)
 

@@ -67,7 +67,7 @@ function goToTopup() {
 }
 
 async function confirmPurchase() {
-  if (auth.balance < selectedPkg.value.price) {
+  if (Number(auth.balance) < Number(selectedPkg.value.price)) {
     toast.error('ยอดเงินไม่เพียงพอ กรุณาเติมเงิน')
     return
   }
@@ -81,20 +81,28 @@ async function confirmPurchase() {
   }
 
   // Create order in store / Supabase
-  const result = await ordersStore.createOrder({
-    product: product.value,
-    packageInfo: selectedPkg.value,
-    amount: selectedPkg.value.price
-  })
+  try {
+    const result = await ordersStore.createOrder({
+      product: product.value,
+      packageInfo: selectedPkg.value,
+      amount: selectedPkg.value.price
+    })
 
-  toast.success(`ซื้อ ${product.value.name} สำเร็จ! ตรวจสอบบัญชีได้ที่คำสั่งซื้อ`)
-  purchasing.value = false
-  showConfirm.value = false
+    toast.success(`ซื้อ ${product.value.name} สำเร็จ! ตรวจสอบบัญชีได้ที่คำสั่งซื้อ`)
+    showConfirm.value = false
 
-  if (result?.order?.id) {
-    router.push(`/orders/${result.order.id}`)
-  } else {
-    router.push('/orders')
+    if (result?.order?.id) {
+      router.push(`/orders/${result.order.id}`)
+    } else {
+      router.push('/orders')
+    }
+  } catch (err) {
+    console.error('Order creation failed, refunding balance:', err)
+    // Refund balance if order creation failed
+    await auth.addBalance(selectedPkg.value.price).catch(() => {})
+    toast.error('เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ เงินจะถูกคืนเข้า Wallet')
+  } finally {
+    purchasing.value = false
   }
 }
 
@@ -133,7 +141,7 @@ const relatedProducts = computed(() =>
             <h1 style="margin-bottom:var(--space-2); font-size:clamp(1.8rem, 4vw, 2.5rem);">{{ product.name }}</h1>
             <div style="display:flex; justify-content:center; gap:var(--space-2); margin-top:var(--space-3); flex-wrap:wrap;">
               <span class="badge badge-accent">
-                -{{ Math.round((1 - product.price / product.original_price) * 100) }}% ส่วนลดพิเศษ
+                -{{ product.original_price ? Math.round((1 - product.price / product.original_price) * 100) : 0 }}% ส่วนลดพิเศษ
               </span>
               <span class="badge badge-success">
                 ⚡ ส่งมอบทันที 24 ชม.
@@ -246,7 +254,7 @@ const relatedProducts = computed(() =>
             <!-- Wallet Balance info -->
             <div v-if="auth.isLoggedIn" class="wallet-balance-box">
               <div style="font-size:0.8125rem; color:var(--gray-300);">
-                ยอดเงินของคุณ: <strong style="color:var(--accent-400);">฿{{ auth.balance.toLocaleString() }}</strong>
+                ยอดเงินของคุณ: <strong style="color:var(--accent-400);">฿{{ Number(auth.balance || 0).toLocaleString() }}</strong>
               </div>
               <RouterLink to="/topup" class="topup-quick-link">
                 + เติมเงิน

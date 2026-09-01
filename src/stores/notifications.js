@@ -14,10 +14,20 @@ export const NOTIFICATION_TYPES = {
 }
 
 export const useNotificationsStore = defineStore('notifications', () => {
-  const auth = useAuthStore()
-  const toast = useToastStore()
+  // Lazy getters to avoid circular dependency — these stores may not exist yet at init time
+  const getAuth = () => useAuthStore()
+  const getToast = () => useToastStore()
 
-  const notifications = ref(JSON.parse(localStorage.getItem('sp_notifications') || '[]'))
+  let _savedNotifications = []
+  try {
+    _savedNotifications = JSON.parse(localStorage.getItem('sp_notifications') || '[]')
+    if (!Array.isArray(_savedNotifications)) _savedNotifications = []
+  } catch {
+    console.warn('Notifications data in localStorage is corrupted, resetting.')
+    _savedNotifications = []
+    localStorage.removeItem('sp_notifications')
+  }
+  const notifications = ref(_savedNotifications)
   const loading = ref(false)
 
   const unreadCount = computed(() => {
@@ -32,6 +42,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * Fetch notifications from Supabase or localStorage
    */
   async function fetchNotifications() {
+    const auth = getAuth()
     if (!auth.isLoggedIn || !auth.user?.id) return notifications.value
 
     if (isSupabaseConfigured && supabase) {
@@ -66,6 +77,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * Subscribe to live Realtime notifications for current user
    */
   function subscribeToNotifications() {
+    const auth = getAuth()
     if (!isSupabaseConfigured || !supabase || !auth.isLoggedIn || !auth.user?.id) return
 
     if (notifyChannel) {
@@ -90,7 +102,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
               notifications.value.unshift(payload.new)
               saveLocal()
               // Show toast
-              toast.info(`${payload.new.title}: ${payload.new.message}`)
+              getToast().info(`${payload.new.title}: ${payload.new.message}`)
             }
           } else if (payload.eventType === 'UPDATE') {
             const idx = notifications.value.findIndex(n => n.id === payload.new.id)
@@ -111,6 +123,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * Add a notification
    */
   async function addNotification({ type = 'system', title, message, link = null, userId = null }) {
+    const auth = getAuth()
     const targetUserId = userId || auth.user?.id
     if (!targetUserId) return
 
@@ -165,12 +178,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
     notifications.value.forEach(n => { n.is_read = true })
     saveLocal()
 
-    if (isSupabaseConfigured && supabase && auth.user?.id) {
+    if (isSupabaseConfigured && supabase && getAuth().user?.id) {
       try {
         await supabase
           .from('notifications')
           .update({ is_read: true })
-          .eq('user_id', auth.user.id)
+          .eq('user_id', getAuth().user.id)
           .eq('is_read', false)
       } catch (e) {}
     }
@@ -197,9 +210,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
     notifications.value = []
     saveLocal()
 
-    if (isSupabaseConfigured && supabase && auth.user?.id) {
+    if (isSupabaseConfigured && supabase && getAuth().user?.id) {
       try {
-        await supabase.from('notifications').delete().eq('user_id', auth.user.id)
+        await supabase.from('notifications').delete().eq('user_id', getAuth().user.id)
       } catch (e) {}
     }
   }
@@ -208,6 +221,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
    * Scan user's orders for expiration within 3 days and generate warning notification
    */
   function checkOrderExpirations(orders = []) {
+    const auth = getAuth()
     if (!auth.isLoggedIn || !auth.user?.id || !Array.isArray(orders)) return
 
     const now = new Date().getTime()
