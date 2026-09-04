@@ -75,11 +75,13 @@ async function handleCheckout() {
       // 4. Redirect to Orders page
       router.push('/orders')
     } else {
-      toast.error('เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาติดต่อแอดมิน')
+      await auth.addBalance(cart.totalPrice).catch(() => {})
+      toast.error('เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ คืนยอดเงินเข้า Wallet แล้ว กรุณาติดต่อแอดมิน')
     }
   } catch (err) {
     console.error('Checkout error:', err)
-    toast.error('เกิดข้อผิดพลาดระหว่างชำระเงิน: ' + (err.message || 'ไม่ทราบสาเหตุ'))
+    await auth.addBalance(cart.totalPrice).catch(() => {})
+    toast.error('เกิดข้อผิดพลาดระหว่างชำระเงิน: ' + (err.message || 'ไม่ทราบสาเหตุ') + ' คืนยอดเงินเข้า Wallet แล้ว')
   } finally {
     cart.isCheckingOut = false
   }

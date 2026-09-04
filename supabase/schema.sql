@@ -304,9 +304,14 @@ as $$
 declare
   v_secret text;
 begin
-  -- Only admin can set credentials
+  -- Only admin can set credentials, OR owner if order credentials have not been set yet
   if not public.is_admin() then
-    raise exception 'ไม่มีสิทธิ์ดำเนินการนี้';
+    if not exists (
+      select 1 from public.orders
+      where id = p_order_id and user_id = auth.uid() and account_password is null
+    ) then
+      raise exception 'ไม่มีสิทธิ์ดำเนินการนี้';
+    end if;
   end if;
 
   select public.get_encryption_secret() into v_secret;

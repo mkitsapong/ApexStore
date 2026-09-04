@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '../../components/DashboardLayout.vue'
 import { useAuthStore } from '../../stores/auth'
@@ -12,12 +12,22 @@ const ordersStore = useOrdersStore()
 const paymentStore = usePaymentStore()
 const router = useRouter()
 
-onMounted(async () => {
+async function loadDashboardData() {
   if (auth.isLoggedIn) {
     await Promise.all([
       ordersStore.fetchUserOrders(),
       paymentStore.fetchTopups()
     ])
+  }
+}
+
+onMounted(() => {
+  loadDashboardData()
+})
+
+watch(() => auth.isLoggedIn, (loggedIn) => {
+  if (loggedIn) {
+    loadDashboardData()
   }
 })
 
@@ -66,7 +76,7 @@ const recentTransactions = computed(() => {
   const topups = paymentStore.topupLogs || []
   for (const t of topups) {
     // Only include if matches user or admin
-    if (!auth.isAdmin && t.user_id && auth.user?.id && t.user_id !== auth.user.id) {
+    if (!auth.isAdmin && auth.user?.id && t.user_id && t.user_id !== auth.user.id) {
       continue
     }
     list.push({
@@ -84,6 +94,9 @@ const recentTransactions = computed(() => {
   // 2. Order purchases
   const orders = ordersStore.orders || []
   for (const o of orders) {
+    if (!auth.isAdmin && auth.user?.id && o.user_id && o.user_id !== auth.user.id) {
+      continue
+    }
     list.push({
       id: `order-${o.id}`,
       type: 'purchase',
@@ -163,7 +176,14 @@ function handleTransactionClick(tx) {
             <RouterLink to="/orders" style="font-size:0.8125rem; color:var(--accent-400);">ดูทั้งหมด ({{ ordersStore.orders.length }}) →</RouterLink>
           </div>
 
-          <div v-if="recentOrders.length > 0" style="display:flex; flex-direction:column; gap:var(--space-3);">
+          <!-- Loading Orders State -->
+          <div v-if="ordersStore.loading" style="text-align:center; padding:var(--space-8) var(--space-4); color:var(--gray-400);">
+            <div style="font-size:1.5rem; margin-bottom:var(--space-2);">⏳</div>
+            <p style="font-size:0.875rem;">กำลังโหลดคำสั่งซื้อ...</p>
+          </div>
+
+          <!-- Orders List -->
+          <div v-else-if="recentOrders.length > 0" style="display:flex; flex-direction:column; gap:var(--space-3);">
             <div
               v-for="o in recentOrders"
               :key="o.id"
@@ -211,7 +231,14 @@ function handleTransactionClick(tx) {
             <RouterLink to="/wallet" style="font-size:0.8125rem; color:var(--accent-400);">ดู Wallet →</RouterLink>
           </div>
 
-          <div v-if="recentTransactions.length > 0" style="display:flex; flex-direction:column; gap:var(--space-3);">
+          <!-- Loading Transactions State -->
+          <div v-if="paymentStore.loading" style="text-align:center; padding:var(--space-8) var(--space-4); color:var(--gray-400);">
+            <div style="font-size:1.5rem; margin-bottom:var(--space-2);">⏳</div>
+            <p style="font-size:0.875rem;">กำลังโหลดประวัติธุรกรรม...</p>
+          </div>
+
+          <!-- Transactions List -->
+          <div v-else-if="recentTransactions.length > 0" style="display:flex; flex-direction:column; gap:var(--space-3);">
             <div
               v-for="tx in recentTransactions"
               :key="tx.id"

@@ -47,9 +47,10 @@ export const useOrdersStore = defineStore('orders', () => {
           .order('created_at', { ascending: false })
 
         if (err) throw err
-        if (data && data.length > 0) {
+        if (data) {
           orders.value = data
           saveLocal()
+          subscribeToOrders()
           return data
         }
       } catch (err) {

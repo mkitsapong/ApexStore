@@ -33,7 +33,7 @@ const stats = computed(() => {
   const approved = allLogs.value.filter(l => l.status === 'approved')
   const totalVolume = approved.reduce((sum, l) => sum + (Number(l.amount) || 0), 0)
   const pending = allLogs.value.filter(l => l.status === 'pending')
-  const autoApproved = approved.filter(l => l.isAutoApproved)
+  const autoApproved = approved.filter(l => l.is_auto_approved || l.isAutoApproved)
 
   return [
     { label: 'ยอดเติมเงินรวม', value: formatCurrency(totalVolume), emoji: '💰', color: 'stat-icon-accent' },
@@ -203,7 +203,7 @@ const statusLabel = {
                     <span :class="['badge', statusBadge[log.status]]">
                       {{ statusLabel[log.status] }}
                     </span>
-                    <span v-if="log.isAutoApproved" style="font-size:0.65rem; color:#4ade80;">⚡ ตรวจสอบ Auto</span>
+                    <span v-if="log.is_auto_approved || log.isAutoApproved" style="font-size:0.65rem; color:#4ade80;">⚡ ตรวจสอบ Auto</span>
                   </div>
                 </td>
                 <td>

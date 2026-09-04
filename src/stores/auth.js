@@ -380,6 +380,9 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     session.value = null
     localStorage.removeItem('sp_user')
+    localStorage.removeItem('sp_orders')
+    localStorage.removeItem('sp_topup_logs')
+    localStorage.removeItem('sp_support_tickets')
   }
 
   /**

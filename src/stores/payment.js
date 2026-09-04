@@ -248,7 +248,7 @@ export const usePaymentStore = defineStore('payment', () => {
 
         const { data, error } = await query
         if (error) throw error
-        if (data && data.length > 0) {
+        if (data) {
           topupLogs.value = data
           saveLogs()
           subscribeToTopups()

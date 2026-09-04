@@ -1,16 +1,26 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DashboardLayout from '../../components/DashboardLayout.vue'
 import { useOrdersStore } from '../../stores/orders'
+import { useAuthStore } from '../../stores/auth'
 import { formatDateTime } from '../../data/mockData'
 
 const router = useRouter()
 const ordersStore = useOrdersStore()
+const auth = useAuthStore()
 const filter = ref('all')
 
 onMounted(() => {
-  ordersStore.fetchUserOrders()
+  if (auth.isLoggedIn) {
+    ordersStore.fetchUserOrders()
+  }
+})
+
+watch(() => auth.isLoggedIn, (loggedIn) => {
+  if (loggedIn) {
+    ordersStore.fetchUserOrders()
+  }
 })
 
 const statusConfig = {
@@ -43,8 +53,14 @@ const filtered = computed(() => {
         </button>
       </div>
 
+      <!-- Loading State -->
+      <div v-if="ordersStore.loading" class="empty-state" style="padding:var(--space-12) 0;">
+        <div style="font-size:2.5rem; margin-bottom:var(--space-2);">⏳</div>
+        <h3 style="color:var(--gray-300);">กำลังโหลดรายการคำสั่งซื้อ...</h3>
+      </div>
+
       <!-- Orders -->
-      <div v-if="filtered.length" style="display:flex; flex-direction:column; gap:var(--space-4);">
+      <div v-else-if="filtered.length" style="display:flex; flex-direction:column; gap:var(--space-4);">
         <div
           v-for="order in filtered"
           :key="order.id"
@@ -55,7 +71,7 @@ const filtered = computed(() => {
           <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-4);">
             <div style="display:flex; align-items:center; gap:var(--space-4);">
               <div style="width:56px;height:56px;background:var(--bg-surface);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-size:2rem;flex-shrink:0;">
-                {{ order.product_emoji }}
+                {{ order.product_emoji || '📦' }}
               </div>
               <div>
                 <div style="font-weight:700; color:var(--white); font-size:1rem; margin-bottom:4px;">{{ order.product_name }}</div>
@@ -65,7 +81,7 @@ const filtered = computed(() => {
             </div>
             <div style="display:flex; align-items:center; gap:var(--space-4);">
               <div style="text-align:right;">
-                <div style="font-size:1.25rem; font-weight:800; color:var(--accent-400); font-family:var(--font-en);">฿{{ order.amount.toLocaleString() }}</div>
+                <div style="font-size:1.25rem; font-weight:800; color:var(--accent-400); font-family:var(--font-en);">฿{{ Number(order.amount || 0).toLocaleString() }}</div>
               </div>
               <span :class="['badge', statusConfig[order.status]?.badgeClass]">{{ statusConfig[order.status]?.label }}</span>
               <span style="color:var(--gray-600);">→</span>

@@ -43,6 +43,10 @@ onMounted(async () => {
   payment.subscribeToSettings()
 })
 
+onUnmounted(() => {
+  clearInterval(timerInterval)
+})
+
 function selectPreset(val) {
   amount.value = val
 }
